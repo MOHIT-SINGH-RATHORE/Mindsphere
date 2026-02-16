@@ -11,6 +11,9 @@ interface Content {
   type: 'VIDEO' | 'ARTICLE' | 'MICRO_MODULE';
   duration: number;
   explanation: string;
+  thumbnail?: string;
+  url?: string;
+  description?: string;
 }
 
 export default function Home() {
@@ -41,6 +44,29 @@ export default function Home() {
     navigate(`/session/${id}`);
   };
 
+  const handleEnableNotifications = async () => {
+    // 1. Subscribe to Push (keep existing)
+    try {
+      await subscribeToPush();
+    } catch (e) {
+      console.warn("Push subscription skipped or failed", e);
+    }
+
+    // 2. Send Email with current recommendations
+    // Improved: Use the dedicated endpoint for rich video emails
+    if (user?.email) {
+      try {
+        await client.post('/api/content/recommendations/email');
+        alert(`Notifications enabled! We sent your personalized video recommendations to ${user.email}.`);
+      } catch (error) {
+        console.error('Failed to send email', error);
+        alert('Notifications enabled, but failed to send email summary.');
+      }
+    } else {
+      alert('Notifications enabled!');
+    }
+  };
+
   if (loading) {
     return <div className="p-8 text-center">Loading your personalized feed...</div>;
   }
@@ -54,7 +80,7 @@ export default function Home() {
             <p className="text-sm text-gray-500">Welcome back, {user?.name}</p>
           </div>
           <div className="flex gap-4 items-center">
-            <button onClick={() => subscribeToPush()} className="text-xs bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full hover:bg-indigo-200">
+            <button onClick={handleEnableNotifications} className="text-xs bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full hover:bg-indigo-200">
               Enable Notifications
             </button>
             <Link to="/survey" className="text-sm font-medium text-gray-600 hover:text-indigo-600">Preferences</Link>

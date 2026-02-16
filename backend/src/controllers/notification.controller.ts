@@ -2,6 +2,9 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../db';
 import { z } from 'zod';
+import { EmailService } from '../services/email.service';
+
+const emailService = new EmailService();
 
 const SubscriptionSchema = z.object({
   endpoint: z.string().url(),
@@ -9,6 +12,12 @@ const SubscriptionSchema = z.object({
     p256dh: z.string(),
     auth: z.string(),
   }),
+});
+
+const NotificationSchema = z.object({
+  to: z.string().email(),
+  subject: z.string(),
+  message: z.string(),
 });
 
 export const subscribe = async (req: AuthRequest, res: Response) => {
@@ -34,6 +43,21 @@ export const subscribe = async (req: AuthRequest, res: Response) => {
     });
 
     res.status(201).json({ message: 'Subscribed' });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+export const sendNotification = async (req: AuthRequest, res: Response) => {
+  try {
+    const data = NotificationSchema.parse(req.body);
+
+    // In a real app, you might want to verify if the user exists or has permissions
+    // For now, we just send the email
+
+    await emailService.sendEmail(data.to, data.subject, data.message);
+
+    res.status(200).json({ message: 'Notification sent' });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
   }

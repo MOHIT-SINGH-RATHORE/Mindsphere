@@ -23,7 +23,14 @@ export default function Analytics() {
     const fetchReport = async () => {
       try {
         const res = await client.get('/api/reports/latest');
-        setReport(res.data);
+        if (res.data && typeof res.data === 'object') {
+          // Basic Validation
+          if (!Array.isArray(res.data.chartData)) {
+            console.warn("Chart data is not array, fixing:", res.data);
+            res.data.chartData = [];
+          }
+          setReport(res.data);
+        }
       } catch (error) {
         console.error('Failed to fetch report', error);
       } finally {
@@ -55,11 +62,32 @@ export default function Analytics() {
               <span className="text-xs font-medium text-gray-500 tracking-wide uppercase">Neural Optimization Reports</span>
             </div>
           </div>
-          {report && (
-            <div className="bg-white/50 px-4 py-1.5 rounded-full border border-gray-200/50 shadow-sm backdrop-blur-sm">
-              <p className="text-sm font-medium text-gray-600">Week of {new Date(report.weekStartDate).toLocaleDateString()}</p>
-            </div>
-          )}
+          <div className="flex items-center gap-4">
+            <button
+              onClick={async () => {
+                if (!user) return;
+                try {
+                  setLoading(true);
+                  await client.get(`/api/analytics/generate/${user.id}`);
+                  // Refresh
+                  const res = await client.get('/api/reports/latest');
+                  setReport(res.data);
+                } catch (e) {
+                  console.error("Generation failed", e);
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full hover:bg-indigo-100 transition-colors"
+            >
+              Generate Report
+            </button>
+            {report && (
+              <div className="bg-white/50 px-4 py-1.5 rounded-full border border-gray-200/50 shadow-sm backdrop-blur-sm">
+                <p className="text-sm font-medium text-gray-600">Week of {new Date(report.weekStartDate).toLocaleDateString()}</p>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -147,7 +175,7 @@ export default function Analytics() {
 
                 <div className="h-80 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={report.chartData}>
+                    <BarChart data={Array.isArray(report.chartData) ? report.chartData : []}>
                       <defs>
                         <linearGradient id="colorBar" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="#6366f1" stopOpacity={1} />

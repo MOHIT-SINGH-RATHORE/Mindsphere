@@ -32,12 +32,11 @@ export const registerServiceWorker = async () => {
 
 export const subscribeToPush = async () => {
   if (!VAPID_PUBLIC_KEY) {
-      console.error('Vapid public key not found');
-      return;
+    throw new Error('Vapid public key not found');
   }
-  
+
   const registration = await navigator.serviceWorker.ready;
-  if (!registration) return;
+  if (!registration) throw new Error('Service Worker not ready');
 
   try {
     const subscription = await registration.pushManager.subscribe({
@@ -47,7 +46,9 @@ export const subscribeToPush = async () => {
 
     await client.post('/api/notifications/subscribe', subscription);
     console.log('Push Subscribed');
+    return true;
   } catch (error) {
     console.error('Failed to subscribe to push', error);
+    throw error;
   }
 };

@@ -17,6 +17,9 @@ webpush.setVapidDetails(
   process.env.VAPID_PRIVATE_KEY || 'K7...'
 );
 
+import { EmailService } from '../services/email.service';
+const emailService = new EmailService();
+
 const reportWorker = new Worker(QUEUES.REPORTS, async (job: Job) => {
   console.log(`Processing report job ${job.id}`);
   const { userId, weekStartDate } = job.data;
@@ -40,8 +43,8 @@ const reportWorker = new Worker(QUEUES.REPORTS, async (job: Job) => {
 
   // 3. Social Media Reduction Score (Proxy)
   // Assumption: Every minute spent here is a minute NOT doomscrolling.
-  // Target: 2.5 hours/week (150 mins) = 100% score.
-  const score = Math.min(100, Math.round((totalProductiveMins / 150) * 100));
+  // Target: 10 hours/week (600 mins) = 100% score (Hard Mode).
+  const score = Math.min(100, Math.round((totalProductiveMins / 600) * 100));
 
   // 4. Generate Chart Data (Daily Breakdown)
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -86,13 +89,24 @@ const reportWorker = new Worker(QUEUES.REPORTS, async (job: Job) => {
 
   console.log(`Report generated for ${userId}: Score ${score}`);
 
-  // 6. Trigger Notification
+  // 6. Trigger Notification (Push)
   await notificationQueue.add('send', {
     userId,
     title: 'Your Weekly Insight 🧠',
     body: `You saved ${totalProductiveMins} mins from doomscrolling this week! Score: ${score}/100`,
     url: '/analytics'
   });
+
+  // 7. Send Email (Gmail)
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (user && user.email) {
+      await emailService.sendWeeklyReport(user.email, user.name || 'User', score, totalProductiveMins);
+      console.log(`Email report sent to ${user.email}`);
+    }
+  } catch (error) {
+    console.error('Failed to send email report', error);
+  }
 
 }, { connection });
 
@@ -175,6 +189,54 @@ const hydratePlanWorker = new Worker(QUEUES.HYDRATE_PLAN, async (job: Job) => {
 }, { connection });
 
 
-export const initWorkers = () => {
+import { getRecommendations } from '../services/recommendation.service';
+import { dailyRecommendationQueue } from './queues';
+
+const dailyRecommendationWorker = new Worker(QUEUES.DAILY_RECOMMENDATIONS, async (job: Job) => {
+  console.log('Starting Daily Recommendation Job');
+
+  try {
+    const users = await prisma.user.findMany({
+      where: {
+        NOT: { email: null }
+      }
+    });
+
+    console.log(`Found ${users.length} users for daily recs.`);
+
+    for (const user of users) {
+      if (!user.email) continue;
+
+      try {
+        const videos = await getRecommendations(user.id);
+        if (videos && videos.length > 0) {
+          await emailService.sendVideoRecommendations(user.email, user.name || 'User', videos);
+          console.log(`Daily recs sent to ${user.email}`);
+        }
+      } catch (err) {
+        console.error(`Failed to send daily recs to ${user.id}`, err);
+      }
+    }
+  } catch (error) {
+    console.error('Daily Worker failed', error);
+  }
+}, { connection });
+
+export const initWorkers = async () => {
   console.log('Workers initialized');
+
+  // Schedule Daily Job (e.g., every day at 09:00 AM)
+  // repeatable job
+  try {
+    await dailyRecommendationQueue.add(
+      'daily-send',
+      {},
+      {
+        repeat: { pattern: '0 9 * * *' } // Cron pattern: At 09:00
+      }
+    );
+    console.log('Daily Recommendation Job Scheduled');
+  } catch (e) {
+    console.error('Failed to schedule daily job', e);
+  }
 };

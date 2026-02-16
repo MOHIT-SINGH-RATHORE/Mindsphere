@@ -14,6 +14,8 @@ export const QUEUES = {
   REPORTS: 'reports',
   NOTIFICATIONS: 'notifications',
   HYDRATE_PLAN: 'hydrate-plan',
+  DAILY_RECOMMENDATIONS: 'daily-recommendations',
 };
 
 export const hydratePlanQueue = new Queue('hydrate-plan', { connection });
+export const dailyRecommendationQueue = new Queue('daily-recommendations', { connection });

@@ -15,6 +15,13 @@ import notificationRoutes from './routes/notification.routes';
 import reportRoutes from './routes/report.routes';
 import moderationRoutes from './routes/moderation.routes';
 import scheduleRoutes from './routes/schedule.routes';
+import analyticsRoutes from './routes/analytics.routes';
+
+import gamificationRoutes from './routes/gamification.routes';
+
+
+
+
 
 // Initialize workers
 initWorkers();
@@ -52,6 +59,13 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/moderation', moderationRoutes);
 app.use('/api/schedule', scheduleRoutes);
+app.use('/api/analytics', analyticsRoutes);
+
+
+app.use('/gamification', gamificationRoutes);
+
+
+
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

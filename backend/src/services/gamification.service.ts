@@ -2,83 +2,98 @@ import { prisma } from '../db';
 
 export class GamificationService {
   private static readonly XP_PER_MINUTE = 10;
-  private static readonly LEVEL_base_XP = 100;
+  private static readonly LEVEL_BASE_XP = 100;
 
-  static async awardXP(userId: string, durationSeconds: number, source: string) {
-    // 10 XP per minute
-    const amount = Math.round((durationSeconds / 60) * this.XP_PER_MINUTE);
-    if (amount <= 0) return;
+  static async awardXP(userId: string, durationSeconds: number, source: string = 'SESSION') {
+    const minutes = durationSeconds / 60;
+    const xpEarned = Math.round(minutes * this.XP_PER_MINUTE);
 
-    await prisma.$transaction(async (tx) => {
-      // 1. Log Transaction
-      await tx.xPTransaction.create({
-        data: {
-          userId,
-          amount,
-          source
-        }
-      });
+    if (xpEarned <= 0) {
+      return { message: "No XP awarded" };
+    }
 
-      // 2. Update User XP and Level
-      const user = await tx.user.findUnique({ where: { id: userId } });
-      if (!user) return;
-
-      let newXP = user.currentXP + amount;
-      let newLevel = user.level;
-      let xpForNextLevel = newLevel * this.LEVEL_base_XP;
-
-      // Level Up Logic
-      while (newXP >= xpForNextLevel) {
-        newXP -= xpForNextLevel;
-        newLevel++;
-        xpForNextLevel = newLevel * this.LEVEL_base_XP;
-        // TODO: Create Notification for Level Up
-      }
-
-      await tx.user.update({
-        where: { id: userId },
-        data: {
-          currentXP: newXP,
-          level: newLevel,
-        }
-      });
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
     });
-  }
 
-  static async updateStreak(userId: string) {
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) return;
+    if (!user) {
+      throw new Error("User not found");
+    }
 
-    const now = new Date();
-    const lastActivity = new Date(user.lastActivity);
-    
-    // Normalize to dates (ignore time)
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const lastDate = new Date(lastActivity.getFullYear(), lastActivity.getMonth(), lastActivity.getDate());
+    let newXP = user.currentXP + xpEarned;
+    let newLevel = user.level;
+    let xpRequired = newLevel * this.LEVEL_BASE_XP;
 
-    const diffTime = Math.abs(today.getTime() - lastDate.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    let newStreak = user.currentStreak;
-
-    if (diffDays === 0) {
-      // Already active today, do nothing (or maybe check min time?)
-    } else if (diffDays === 1) {
-      // Consecutive day
-      newStreak++;
-    } else {
-      // Missed a day or more
-      newStreak = 1;
+    while (newXP >= xpRequired) {
+      newXP -= xpRequired;
+      newLevel++;
+      xpRequired = newLevel * this.LEVEL_BASE_XP;
     }
 
     await prisma.user.update({
       where: { id: userId },
       data: {
-        lastActivity: now,
-        currentStreak: newStreak
+        currentXP: newXP,
+        level: newLevel,
+        lastActivity: new Date()
       }
     });
 
-    return newStreak;
+    await prisma.xPTransaction.create({
+      data: {
+        userId,
+        amount: xpEarned,
+        source
+      }
+    });
+
+    return {
+      xpEarned,
+      newXP,
+      newLevel
+    };
+  }
+
+  static async updateStreak(userId: string) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user) return;
+
+    const now = new Date();
+    const lastActivity = new Date(user.lastActivity);
+
+    // Check if last activity was yesterday
+    const isYesterday = (
+      now.getDate() - lastActivity.getDate() === 1 &&
+      now.getMonth() === lastActivity.getMonth() &&
+      now.getFullYear() === lastActivity.getFullYear()
+    );
+
+    // If successfully yesterday, increment streak
+    if (isYesterday) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { currentStreak: { increment: 1 } }
+      });
+    } else if (now.getDate() !== lastActivity.getDate()) {
+      // If gap is more than 1 day (and not today), reset streak
+      // Wait, if last activity was today, we do nothing.
+      // If gap > 1 day, reset.
+      const diffTime = Math.abs(now.getTime() - lastActivity.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays > 1) {
+        await prisma.user.update({
+          where: { id: userId },
+          data: { currentStreak: 1 } // Reset to 1 since they are active today
+        });
+      }
+    }
   }
 }
+
+// Keep old export for compatibility if needed, but optimally remove it.
+// For now, let's stick to the class.
+
