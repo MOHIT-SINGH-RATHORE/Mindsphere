@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Default model for text generation
-const MODEL_NAME = 'gemini-2.0-flash'; 
+const MODEL_NAME = 'gemini-2.0-flash-lite';
 
 export class LlmService {
     
@@ -59,6 +59,76 @@ export class LlmService {
         } catch (error) {
             console.error('Error generating curriculum from LLM:', error);
             return this.getMockCurriculum(topic, difficulty, days);
+        }
+    }
+
+    /**
+     * Starts an interactive chat session with context and history
+     */
+    async chat(history: any[], message: string, systemContext?: string): Promise<string> {
+        if (!this.apiKey) {
+            return "GEMINI_API_KEY is not set. I am a mock AI assistant. How can I help you today?";
+        }
+
+        try {
+            // Using gemini-2.0-flash which supports tools/history well
+            const model = this.genAI.getGenerativeModel({ 
+                model: MODEL_NAME,
+                systemInstruction: systemContext || "You are an expert tutor and AI Learning Assistant for MindSphere. Provide helpful, concise, and accurate answers to help the learner."
+            });
+
+            // Format history for Gemini
+            // Gemini expects { role: 'user' | 'model', parts: [{ text: string }] }
+            const formattedHistory = history.map(msg => ({
+                role: msg.role === 'assistant' ? 'model' : 'user', // map to standard gemini roles
+                parts: [{ text: msg.content }]
+            }));
+
+            // Gemini requires the first history entry to be 'user', never 'model'.
+            // The chatbot's initial greeting shows as 'model' — drop leading model turns.
+            while (formattedHistory.length > 0 && formattedHistory[0].role === 'model') {
+                formattedHistory.shift();
+            }
+
+            const chat = model.startChat({
+                history: formattedHistory,
+            });
+
+            const result = await chat.sendMessage(message);
+            return result.response.text();
+        } catch (error: any) {
+            console.error('Error generating chat response:', error);
+            if (error?.status === 429) {
+                return "I'm receiving too many requests right now. Please wait a moment and try again.";
+            }
+            return "I apologize, but I encountered an error processing your request. Please try again.";
+        }
+    }
+
+    /**
+     * Generates a context-aware hint for a practice problem/task
+     */
+    async generateHint(topic: string, specificContext: string): Promise<string> {
+        if (!this.apiKey) {
+            return `Here is a mock hint for ${topic}: Try breaking the problem down into smaller steps.`;
+        }
+
+        try {
+            const model = this.genAI.getGenerativeModel({ model: MODEL_NAME });
+
+            const prompt = `
+                Act as an expert tutor. A student is stuck on a task related to "${topic}".
+                Specific context or question they are working on: "${specificContext}".
+                
+                Provide a single, short, encouraging hint (1-3 sentences maximum).
+                CRITICAL: NEVER give away the direct answer. Just nudge them in the right direction or suggest a concept to review.
+            `;
+
+            const result = await model.generateContent(prompt);
+            return result.response.text().trim();
+        } catch (error) {
+            console.error('Error generating hint:', error);
+            return `Try reviewing the fundamental principles of ${topic}.`;
         }
     }
 

@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import client from '../api/client';
 import { saveEventToBuffer } from '../utils/syncManager';
-import { ArrowLeft, Clock, BookOpen, CheckCircle, XCircle, ChevronRight, SkipForward, Sparkles } from 'lucide-react';
+import { ArrowLeft, Clock, BookOpen, CheckCircle, XCircle, ChevronRight, SkipForward, Sparkles, Lightbulb } from 'lucide-react';
 
 interface QuizQuestion {
   question: string;
@@ -34,6 +34,10 @@ export default function SessionRunner() {
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [score, setScore] = useState(0);
   const [endedSessionId, setEndedSessionId] = useState<string | null>(null);
+  
+  // Hint state
+  const [hint, setHint] = useState<string | null>(null);
+  const [loadingHint, setLoadingHint] = useState(false);
 
   useEffect(() => {
     const start = async () => {
@@ -109,6 +113,7 @@ export default function SessionRunner() {
   };
 
   const handleNextQuestion = () => {
+    setHint(null);
     if (currentQ + 1 < questions.length) {
       setCurrentQ(q => q + 1);
       setSelectedOption(null);
@@ -125,6 +130,25 @@ export default function SessionRunner() {
       });
     } catch { /* ignore */ }
     setQuizState('result');
+  };
+
+  const handleGetHint = async () => {
+    if (!content) return;
+    const q = questions[currentQ];
+    
+    setLoadingHint(true);
+    try {
+      const res = await client.post('/api/ai/hint', {
+        topic: content.title,
+        specificContext: q.question
+      });
+      setHint(res.data.hint);
+    } catch (error) {
+      console.error('Failed to get hint', error);
+      setHint('Sorry, I could not generate a hint right now.');
+    } finally {
+      setLoadingHint(false);
+    }
   };
 
   const formatTime = (sec: number) => {
@@ -246,6 +270,26 @@ export default function SessionRunner() {
                 );
               })}
             </div>
+
+            {/* Hint Section */}
+            {!answered && (
+              <div className="mt-6 flex justify-center">
+                {!hint ? (
+                  <button
+                    onClick={handleGetHint}
+                    disabled={loadingHint}
+                    className="flex items-center gap-2 text-sm text-yellow-400 hover:text-yellow-300 transition-colors bg-yellow-400/10 hover:bg-yellow-400/20 px-4 py-2 rounded-full border border-yellow-400/20 disabled:opacity-50"
+                  >
+                    <Lightbulb size={16} />
+                    {loadingHint ? 'Generating Hint...' : 'Need a hint?'}
+                  </button>
+                ) : (
+                  <div className="w-full p-4 bg-yellow-400/10 border border-yellow-400/30 rounded-xl text-sm text-yellow-200">
+                    💡 {hint}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Explanation */}
             {answered && q.explanation && (

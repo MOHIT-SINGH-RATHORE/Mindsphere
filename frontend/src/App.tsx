@@ -11,6 +11,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import Schedule from './pages/Schedule';
 import TodoTasks from './pages/TodoTasks';
 import DailyPlanner from './pages/DailyPlanner';
+import AIChatbot from './components/AIChatbot';
 import { initSync } from './utils/syncManager';
 import { registerServiceWorker } from './utils/notifications';
 
@@ -56,6 +57,7 @@ function App() {
             </PrivateRoute>
           } />
         </Routes>
+        <AIChatbot />
       </AuthProvider>
     </Router>
   );
