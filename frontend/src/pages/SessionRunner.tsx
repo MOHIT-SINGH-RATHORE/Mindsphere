@@ -3,6 +3,22 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import client from '../api/client';
 import { saveEventToBuffer } from '../utils/syncManager';
 import { ArrowLeft, Clock, BookOpen, CheckCircle, XCircle, ChevronRight, SkipForward, Sparkles, Lightbulb } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+
+const MarkdownComponents = {
+  code({node, inline, className, children, ...props}: any) {
+    return !inline ? (
+      <pre className="bg-black/50 p-4 rounded-xl mt-3 mb-3 overflow-x-auto text-sm font-mono text-purple-200 border border-white/10 shadow-inner" {...props}>
+        <code className={className} {...props}>{children}</code>
+      </pre>
+    ) : (
+      <code className="bg-black/30 px-1.5 py-0.5 rounded text-purple-200 font-mono text-sm" {...props}>{children}</code>
+    )
+  },
+  p({children}: any) {
+    return <span className="inline-block break-words">{children}</span>
+  }
+};
 
 interface QuizQuestion {
   question: string;
@@ -166,17 +182,23 @@ export default function SessionRunner() {
     );
 
     if (content.type === 'VIDEO' || content.url?.includes('youtube') || content.url?.includes('youtu.be')) {
-      const videoId = content.url?.split('v=')[1]?.split('&')[0] || content.url?.split('/').pop();
-      const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
-      return (
-        <iframe
-          src={embedUrl}
-          title={content.title}
-          className="w-full h-full rounded-xl"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-        />
-      );
+      let videoId = content.url?.split('v=')[1]?.split('&')[0];
+      if (!videoId && content.url?.includes('youtu.be/')) {
+        videoId = content.url?.split('youtu.be/')[1]?.split('?')[0];
+      }
+
+      if (videoId) {
+        const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
+        return (
+          <iframe
+            src={embedUrl}
+            title={content.title}
+            className="w-full h-full rounded-xl"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        );
+      }
     }
 
     return (
@@ -245,8 +267,10 @@ export default function SessionRunner() {
           </div>
 
           {/* Question card */}
-          <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-8 shadow-2xl">
-            <h2 className="text-lg font-semibold text-white mb-6 leading-snug">{q.question}</h2>
+          <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-8 shadow-2xl overflow-hidden">
+            <div className="text-lg font-semibold text-white mb-6 leading-relaxed">
+              <ReactMarkdown components={MarkdownComponents}>{q.question}</ReactMarkdown>
+            </div>
 
             <div className="space-y-3">
               {q.options.map((opt, idx) => {
@@ -263,7 +287,9 @@ export default function SessionRunner() {
 
                 return (
                   <button key={idx} onClick={() => handleSelectOption(idx)} className={base}>
-                    <span>{opt}</span>
+                    <span className="flex-1 mr-4 overflow-hidden break-words pointer-events-none">
+                      <ReactMarkdown components={MarkdownComponents}>{opt}</ReactMarkdown>
+                    </span>
                     {answered && idx === q.correctIndex && <CheckCircle size={18} className="text-green-400 shrink-0" />}
                     {answered && idx === selectedOption && idx !== q.correctIndex && <XCircle size={18} className="text-red-400 shrink-0" />}
                   </button>

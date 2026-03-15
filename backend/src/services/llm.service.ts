@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { YoutubeTranscript } from 'youtube-transcript';
 
 // Default model for text generation
 const MODEL_NAME = 'gemini-2.0-flash-lite';
@@ -465,44 +466,90 @@ Now generate the adaptive schedule:
     /**
      * Generates a multiple-choice quiz based on content title and description
      */
-    async generateQuiz(contentTitle: string, contentDescription: string, numQuestions: number = 5): Promise<any[]> {
+    async generateQuiz(contentTitle: string, contentExternalId: string | null, contentDescription: string, numQuestions: number = 5): Promise<any[]> {
         if (!this.apiKey) {
             console.warn('GEMINI_API_KEY is not set. Returning a mock quiz.');
             return this.getMockQuiz(contentTitle, numQuestions);
         }
 
+        let transcriptText = '';
+        if (contentExternalId) {
+            try {
+                console.log(`[QuizGen] Fetching transcript for ${contentExternalId}...`);
+                const transcript = await YoutubeTranscript.fetchTranscript(contentExternalId);
+                transcriptText = transcript.map(t => t.text).join(' ');
+                console.log(`[QuizGen] Transcript loaded! Length: ${transcriptText.length}`);
+                
+                if (transcriptText.length > 50000) {
+                    transcriptText = transcriptText.substring(0, 50000);
+                }
+            } catch (err) {
+                console.error(`[QuizGen] Failed to fetch transcript for video ${contentExternalId}:`, err);
+            }
+        } else {
+            console.log(`[QuizGen] No external ID provided for title: ${contentTitle}`);
+        }
+
         try {
-            const model = this.genAI.getGenerativeModel({ model: MODEL_NAME });
+            console.log(`[QuizGen] Calling GROK LLM with transcript (length=${transcriptText.length})`);
+            const grokApiKey = process.env.GROK_API_KEY;
+            
+            if (!grokApiKey) {
+                throw new Error("GROK_API_KEY is missing from environment variables.");
+            }
 
             const prompt = `
-                Act as an expert teacher creating a rigorous, real-world assessment.
-                Create EXACTLY ${numQuestions} multiple-choice questions specifically testing the core knowledge presented in the following video content:
+                Act as an expert coding instructor creating a rigorous, real-world assessment.
+                Create EXACTLY ${numQuestions} in-depth multiple-choice questions specifically testing the deep technical knowledge presented in the following video content.
+                
                 Video Title: "${contentTitle}"
                 Video Description: "${contentDescription}"
+                ${transcriptText ? `\nVideo Transcript (excerpt):\n"""\n${transcriptText}\n"""\n` : ''}
 
-                CRITICAL INSTRUCTIONS FOR OPTIONS:
-                1. The questions MUST directly relate to the specific Video Title and Description provided above.
-                2. Generate exactly 4 distinct, detailed options per question.
-                3. EXACTLY ONE option is correct. The other 3 must be plausible, realistic distractors related to the specific topic of the video, NOT generic placeholders.
-                4. Do NOT use generic options like "All of the above", "None of the above", "Option A", or "Both A and B". Make up actual, factual distractors if necessary.
-                5. The \`correctIndex\` must be the exact integer index (0-3) of the correct option in the options array.
-                6. Ensure the questions test real-world understanding of the video's subject matter. (Random seed: ${Math.random()})
+                CRITICAL INSTRUCTIONS FOR QUESTIONS AND OPTIONS:
+                1. The questions MUST test specific syntax, real code snippets, patterns, or architecture decisions discussed in the transcript or inferred from the topic.
+                2. DO NOT ask generic or trivial questions. Give them actual code to read and analyze.
+                3. Use markdown block formatting for code (e.g. \`\`\`javascript \\n code... \\n\`\`\`) inside the 'question' string and 'options' strings if necessary. Use \`inline code\` for technical terms.
+                4. Generate exactly 4 distinct, detailed options per question.
+                5. EXACTLY ONE option is correct. The other 3 must be plausible, realistic distractors related to the specific code or topic.
+                6. The \`correctIndex\` must be the exact integer index (0-3) of the correct option in the options array.
 
                 FORMAT REQUIREMENTS:
                 Return ONLY a strict JSON array of question objects. Do NOT wrap it in markdown block quotes (like \`\`\`json). Just return the raw JSON starting with [ and ending with ].
-                The JSON MUST follow this exact structure, but filled with your generated, highly-specific content:
+                The JSON MUST follow this exact structure:
                 [
                     {
-                        "question": "What specific concept or tool was discussed regarding [Topic from Video]?",
-                        "options": ["Plausible Distractor 1", "Plausible Distractor 2", "Correct Detailed Answer", "Plausible Distractor 3"],
+                        "question": "What is the output of the following code snippet?\\n\\n\`\`\`javascript\\nconsole.log(typeof null);\\n\`\`\`",
+                        "options": ["\`undefined\`", "\`null\`", "\`object\`", "\`string\`"],
                         "correctIndex": 2,
-                        "explanation": "This is correct because in the context of the video..."
+                        "explanation": "In JavaScript, the \`typeof\` operator returns 'object' for \`null\`. As explained in the video..."
                     }
                 ]
             `;
 
-            const result = await model.generateContent(prompt);
-            const responseText = result.response.text().trim();
+            const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${grokApiKey}`
+                },
+                body: JSON.stringify({
+                    model: "llama-3.3-70b-versatile",
+                    messages: [
+                        { role: "system", content: "You are an expert coding instructor. Ensure you output ONLY a valid JSON array, strictly following the required schema, with NO markdown formatting around the output." },
+                        { role: "user", content: prompt }
+                    ],
+                    temperature: 0.2
+                })
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`Groq API Error ${response.status}: ${errText}`);
+            }
+
+            const data = await response.json();
+            const responseText = data.choices[0]?.message?.content?.trim() || '';
 
             try {
                 // Remove potential markdown formatting if the LLM includes it despite instructions
@@ -515,14 +562,14 @@ Now generate the adaptive schedule:
                     return quiz.slice(0, numQuestions);
                 }
             } catch (parseError) {
-                console.error('Failed to parse LLM quiz response as JSON:', responseText, parseError);
-                console.error('Raw LLM Response was:', responseText);
+                console.error('[QuizGen] Failed to parse LLM quiz response as JSON:', parseError);
+                console.error('[QuizGen] Raw LLM Response was:', responseText);
             }
 
             return this.getMockQuiz(contentTitle, numQuestions);
 
         } catch (error) {
-            console.error('Error generating quiz from LLM:', error);
+            console.error('[QuizGen] Error generating quiz from GROK:', error);
             return this.getMockQuiz(contentTitle, numQuestions);
         }
     }

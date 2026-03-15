@@ -22,7 +22,7 @@ router.get('/:id/quiz', async (req, res) => {
 
         // 2. Generate new quiz via LLM
         // We'll generate 5 questions.
-        const questions = await llmService.generateQuiz(content.title, content.description || 'General concepts of this topic.');
+        const questions = await llmService.generateQuiz(content.title, content.externalId, content.description || 'General concepts of this topic.');
 
         // 3. Save to DB using upsert to overwrite any existing quiz for this content
         const quiz = await prisma.quiz.upsert({
