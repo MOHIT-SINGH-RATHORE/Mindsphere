@@ -21,9 +21,7 @@ import quizRoutes from './routes/quiz.routes';
 import taskRoutes from './routes/task.routes';
 import dailyPlanRoutes from './routes/dailyPlan.routes';
 import aiRoutes from './routes/ai.routes';
-
-
-
+import coursePlanRoutes from './routes/coursePlan.routes';
 
 // Initialize workers
 initWorkers();
@@ -43,7 +41,7 @@ app.use(globalLimiter);
 // Observability Middleware
 app.use(metricsMiddleware);
 app.use(cors({
-  origin: true, // Allow any origin
+  origin: true,
   credentials: true
 }));
 app.use((req, res, next) => {
@@ -62,14 +60,12 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/moderation', moderationRoutes);
 app.use('/api/schedule', scheduleRoutes);
 app.use('/api/analytics', analyticsRoutes);
-app.use('/api/content', quizRoutes); // Mounted under /api/content/:id/quiz
+app.use('/api/content', quizRoutes);
 app.use('/gamification', gamificationRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/daily-plan', dailyPlanRoutes);
 app.use('/api/ai', aiRoutes);
-
-
-
+app.use('/api/course', coursePlanRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

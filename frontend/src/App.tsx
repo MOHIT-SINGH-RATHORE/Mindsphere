@@ -14,6 +14,7 @@ import DailyPlanner from './pages/DailyPlanner';
 import AIChatbot from './components/AIChatbot';
 import { initSync } from './utils/syncManager';
 import { registerServiceWorker } from './utils/notifications';
+import Header from './components/Header';
 
 const PrivateRoute = ({ children }: { children: React.ReactElement }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -31,6 +32,7 @@ function App() {
   return (
     <Router>
       <AuthProvider>
+        <Header />
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
