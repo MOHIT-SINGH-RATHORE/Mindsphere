@@ -139,6 +139,7 @@ export const endSession = async (req: AuthRequest, res: Response) => {
     // Update streak before awarding XP because awardXP updates lastActivity to now
     await GamificationService.updateStreak(userId);
     await GamificationService.awardXP(userId, computedDuration, 'SESSION');
+    await GamificationService.updateChallengeProgress(userId, 'SESSION');
 
     res.json(updatedSession);
   } catch (error: any) {

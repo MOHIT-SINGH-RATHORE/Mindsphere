@@ -1,8 +1,22 @@
 @import "tailwindcss";
 
+:root {
+  --theme-primary: #7c3aed;
+  --theme-secondary: #4f46e5;
+  --theme-background: #0f172a;
+  --theme-text: #f8fafc;
+  --theme-accent: #c026d3;
+}
+
 @layer base {
   body {
-    @apply font-sans bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-slate-100 min-h-screen antialiased selection:bg-purple-500 selection:text-white;
+    @apply font-sans bg-slate-900 text-slate-100 min-h-screen antialiased selection:bg-purple-500 selection:text-white;
+    transition: background-color 0.5s ease, color 0.5s ease;
+  }
+  
+  body.app-themed {
+    background: var(--theme-background) !important;
+    color: var(--theme-text) !important;
   }
 }
 

@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  binaryTargets = ["native", "windows"]
 }
 
 datasource db {
@@ -74,6 +75,10 @@ model User {
   studyPlans        StudyPlan[]
   dailyPlans        DailyPlan[]
   coursePlans       CoursePlan[]
+
+  // Achievement System
+  activeThemeId     String?
+  userThemes        UserTheme[]
 }
 
 model PushSubscription {
@@ -254,8 +259,16 @@ model Challenge {
   xpReward    Int
   startDate   DateTime
   endDate     DateTime
+  type        ChallengeType @default(DAILY)
 
   userChallenges UserChallenge[]
+}
+
+enum ChallengeType {
+  DAILY
+  WEEKLY
+  SEASONAL
+  ACHIEVEMENT
 }
 
 model UserChallenge {
@@ -278,6 +291,7 @@ model Badge {
   name        String
   description String
   iconUrl     String
+  category    String @default("GLOBAL") // "GLOBAL", "REACT", "CSS", etc.
 
   userBadges UserBadge[]
 }
@@ -492,4 +506,28 @@ model DailyPerformance {
 
   @@unique([courseId, dayNumber])
   @@index([courseId])
+}
+
+// Achievement System - Themes
+model Theme {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  cssConfig Json     // { primary, secondary, background, text, accent, gradient }
+  xpCost    Int      @default(0)
+  isPublic  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  userThemes UserTheme[]
+}
+
+model UserTheme {
+  id         String   @id @default(uuid())
+  userId     String
+  themeId    String
+  unlockedAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme Theme @relation(fields: [themeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, themeId])
 }

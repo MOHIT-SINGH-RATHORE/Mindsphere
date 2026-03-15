@@ -61,7 +61,7 @@ app.use('/api/moderation', moderationRoutes);
 app.use('/api/schedule', scheduleRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/content', quizRoutes);
-app.use('/gamification', gamificationRoutes);
+app.use('/api/gamification', gamificationRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/daily-plan', dailyPlanRoutes);
 app.use('/api/ai', aiRoutes);

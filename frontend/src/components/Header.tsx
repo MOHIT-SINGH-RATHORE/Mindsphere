@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Layers } from 'lucide-react';
 import client from '../api/client';
 import { subscribeToPush } from '../utils/notifications';
+import StreakIndicator from './StreakIndicator';
 
 export default function Header() {
   const { user, isAuthenticated, logout } = useAuth();
@@ -38,6 +39,7 @@ export default function Header() {
           <p className="text-sm text-gray-300">Welcome back, {user?.name}</p>
         </div>
         <div className="flex gap-4 items-center">
+          <StreakIndicator />
           <button 
             onClick={handleEnableNotifications} 
             className="text-xs bg-purple-500/20 text-purple-300 border border-purple-500/30 px-3 py-1 rounded-full hover:bg-purple-500/30 transition-colors"

@@ -101,7 +101,8 @@ const reportWorker = new Worker(QUEUES.REPORTS, async (job: Job) => {
   // 7. Send Email (Gmail)
   try {
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (user && user.email) {
+    if (!user) return; // user is User, not null here
+    if (user.email) {
       await emailService.sendWeeklyReport(user.email, user.name || 'User', score, totalProductiveMins);
       console.log(`Email report sent to ${user.email}`);
     }

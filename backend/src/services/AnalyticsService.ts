@@ -39,27 +39,60 @@ export class AnalyticsService {
 
     // Engagement score (0–1 scale)
     const IDEAL_WEEKLY_MINS = 300;
-    const score = Math.min(totalProductiveMins / IDEAL_WEEKLY_MINS, 1);
+    const score = Number(Math.min((totalProductiveMins / IDEAL_WEEKLY_MINS) * 100, 100).toFixed(2));
 
-    // 4. Generate Chart Data (Daily Breakdown)
+    // 4. Generate Chart Data (Daily Breakdown & Subject Mastery)
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const dailyStats = new Array(7).fill(0).map((_, i) => {
       const d = new Date(weekStart);
       d.setDate(d.getDate() + i);
       return {
         day: days[d.getDay()],
-        date: d.toLocaleDateString('en-CA'), // YYYY-MM-DD
+        date: d.toLocaleDateString('en-CA'),
         minutes: 0
       };
     });
 
-    sessions.forEach(s => {
-      const sTime = new Date(s.startTime); // Ensure it's a Date object
+    const subjectMap: Record<string, number> = {};
+
+    for (const s of sessions) {
+      const sTime = new Date(s.startTime);
       const dayIndex = Math.floor((sTime.getTime() - weekStart.getTime()) / (1000 * 60 * 60 * 24));
+      const mins = Math.round((s.duration || 0) / 60);
+
       if (dayIndex >= 0 && dayIndex < 7) {
-        dailyStats[dayIndex].minutes += Math.round((s.duration || 0) / 60);
+        dailyStats[dayIndex].minutes += mins;
       }
-    });
+
+      // Find Topic
+      let topic = 'General';
+      if (s.dailyTaskId) {
+        const dt = await prisma.dailyTask.findUnique({
+          where: { id: s.dailyTaskId },
+          include: { dailyPlan: true }
+        });
+        if (dt?.dailyPlan.topic) topic = dt.dailyPlan.topic;
+      } else if (s.studySessionId) {
+        const ss = await prisma.studySession.findUnique({
+          where: { id: s.studySessionId },
+          include: { plan: true }
+        });
+        if (ss?.plan.topic) topic = ss.plan.topic;
+      }
+
+      subjectMap[topic] = (subjectMap[topic] || 0) + mins;
+    }
+
+    const subjectData = Object.entries(subjectMap).map(([subject, minutes]) => ({
+      subject,
+      minutes,
+      fullMark: Math.max(...Object.values(subjectMap), 60)
+    }));
+
+    const chartData = {
+      daily: dailyStats,
+      subjects: subjectData
+    };
 
     const report = await prisma.weeklyReport.upsert({
       where: {
@@ -72,7 +105,7 @@ export class AnalyticsService {
         totalSessions,
         totalProductiveMins,
         score,
-        chartData: dailyStats
+        chartData: chartData as any
       },
       create: {
         userId,
@@ -80,7 +113,7 @@ export class AnalyticsService {
         totalSessions,
         totalProductiveMins,
         score,
-        chartData: dailyStats
+        chartData: chartData as any
       }
     });
 

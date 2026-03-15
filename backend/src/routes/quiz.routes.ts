@@ -82,6 +82,13 @@ router.post('/:id/quiz/submit', authenticate, async (req: AuthRequest, res: any)
                     source: 'QUIZ_BONUS'
                 }
             });
+
+            // Handle Achievements/Badges
+            const { GamificationService } = require('../services/gamification.service');
+            const content = await prisma.content.findUnique({ where: { id } });
+            if (content) {
+                await GamificationService.checkQuizAchievements(req.user.userId, percentage, content.title);
+            }
         }
 
         res.json({
